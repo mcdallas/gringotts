@@ -8,6 +8,7 @@ setup(
     keywords="mimblewimble grin cli",
     version='0.1',
     py_modules=['src.cli'],
+    packages=['src'],
     install_requires=['Click', 'requests'],
     entry_points='''
         [console_scripts]
