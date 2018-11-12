@@ -60,7 +60,10 @@ class Keybase(Backend):
     def receive_message(self, sender):
         payload = {"method": "read", "params": {"options": {"channel": {"name": sender, 'topic_type': 'dev'}}, 'unread_only': True, 'peek': False}}
         response = self.api_send(payload)
-        messages = response['result']['messages']
+        try:
+            messages = response['result']['messages']
+        except KeyError:
+            messages = []
 
         unread = [m for m in messages if m['msg']['content']['type'] == 'text' and m['msg'].get('unread') is True]
 
