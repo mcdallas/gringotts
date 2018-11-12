@@ -5,6 +5,8 @@ from subprocess import PIPE, run
 
 from .errors import ApiError, UserError
 
+__all__ = ['Keybase']
+
 
 class Backend:
 

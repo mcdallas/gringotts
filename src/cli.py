@@ -2,17 +2,31 @@ import click
 import sys
 import json
 import src.backends
+from decimal import Decimal, getcontext, InvalidOperation
 from src.grin import GrinOwnerApi, GrinForeignApi, read_secret_key
 from src.errors import UserError, GrinError, BackEndError
 
 
-def grins_to_nanogrins(amt):
-    if amt > 10**5 or not (amt * 10**9).is_integer:
-        raise UserError('Amount should be in GRINs')
-    return int(amt * 10**9)
+backends = click.Choice([b.lower() for b in src.backends.__all__])
+getcontext().prec = 9
+
+
+def grins_to_nanogrins(ctx, param, value):
+    """Handle floating point conversion"""
+    try:
+        value = Decimal(value)
+        if value > 10**5:
+            raise click.BadParameter('AMOUNT should be in GRINs')
+        value = (value * 10 ** 9)
+        if value.to_integral_value() != value:
+            raise click.BadParameter('The smallest unit is 1 nanoGRIN or 10^-9 GRIN')
+    except InvalidOperation:
+        raise click.BadParameter(f'AMOUNT should be a number')
+    return int(value)
 
 
 @click.group()
+@click.version_option()
 def cli():
     """Sends or receives grins using the specified backend for communication.
     You need to have a grin node running and the selected backend installed"""
@@ -20,9 +34,9 @@ def cli():
 
 
 @cli.command()
-@click.argument('amount', type=float)
+@click.argument('amount', type=float, callback=grins_to_nanogrins)
 @click.argument('recipient', type=str)
-@click.option('--backend', '-b', default='keybase', help='Which backend to use for communication')
+@click.option('--backend', '-b', default='keybase', type=backends, help='Which backend to use for communication')
 @click.option('--ttl', '-t', default=60, help='Duration in seconds before transaction is reversed')
 @click.option('--confirmations', '-c', default=5, help='Number of confirmations')
 @click.option('--fluff', '-f', is_flag=True, help='Whether to fluff the transaction upon broadcasting')
@@ -35,7 +49,7 @@ def send(amount, recipient, backend, ttl, confirmations, fluff, outputs, host, u
     try:
         backend = getattr(src.backends, backend.title())()
         grin = GrinOwnerApi(host=host, username=username, secret=secret or read_secret_key())
-        slate = grin.create_tx(amount=grins_to_nanogrins(amount), confirmations=confirmations, fluff=fluff, max_outputs=outputs)
+        slate = grin.create_tx(amount=amount, confirmations=confirmations, fluff=fluff, max_outputs=outputs)
         slate_id = slate['id']
         backend.send_message(msg=json.dumps(slate), recipient=recipient, ttl=ttl)
     except (UserError, GrinError, BackEndError) as e:
@@ -58,7 +72,7 @@ def send(amount, recipient, backend, ttl, confirmations, fluff, outputs, host, u
 
 @cli.command()
 @click.argument('sender', type=str)
-@click.option('--backend', '-b', default='keybase', help='Which backend to use for communication')
+@click.option('--backend', '-b', default='keybase', type=backends, help='Which backend to use for communication')
 @click.option('--host', '-h', default='127.0.0.1:13415', help='The address that grin foreign api is listening on')
 def receive(sender, backend, host):
     """Args: [SENDER]"""
